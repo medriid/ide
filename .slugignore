@@ -1,0 +1,46 @@
+# Exclude unnecessary files from Heroku slug to speed up deployments
+# Heroku automatically caches node_modules and .next between builds
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+
+# Development files
+.vscode
+.idea
+*.swp
+*.swo
+*.sublime-*
+
+# Testing
+coverage
+.nyc_output
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__
+
+# Environment files (should use Heroku config vars)
+.env.local
+.env.development
+.env.test
+
+# Build artifacts (will be regenerated)
+.next/cache
+*.tsbuildinfo
+
+# Docker files (not needed for Heroku buildpack)
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log

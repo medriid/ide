@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:root@db:5432/appdb?sslmode=disable
+      NEXTAUTH_SECRET: changeme
+      NEXTAUTH_URL: http://localhost:3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    command: ["sh","-c","npx prisma db push && npm run start"]
+volumes:
+  db_data:

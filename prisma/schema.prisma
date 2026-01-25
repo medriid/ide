@@ -1,0 +1,496 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String
+  role          String   @default("user")
+  avatarUrl     String?  @db.Text
+  bio           String?  @db.Text
+  xp            Int      @default(0)
+  level         Int      @default(1)
+  lastKnownIp   String?
+  createdAt     DateTime @default(now())
+  lastLoginAt   DateTime? @default(now())
+  schema        SqlSchema?
+  // GitHub integration
+  githubId      String?  @unique
+  githubUsername String?
+  githubAccessToken String? @db.Text
+  githubConnectedAt DateTime?
+  // PIN for project security
+  projectPin   String?  // Hashed PIN for project locking
+  
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  friendsInitiated Friendship[] @relation("FriendshipInitiator")
+  friendsReceived  Friendship[] @relation("FriendshipReceiver")
+  achievements     UserAchievement[]
+  studyStreak     StudyStreak?
+  studyNotes       StudyNote[]
+  studyChecklist   StudyChecklist?
+  codeSnippets     CodeSnippet[]
+  codeExecutions   CodeExecutionHistory[]
+  dailyQuestProgress DailyQuestProgress[]
+  customization    UserCustomization?
+  mediumIDEProjects MediumIDEProject[]
+  mediumIDEPages   MediumIDEPage[]
+  mediumIDEFiles   MediumIDEFile[]
+  mediumIDEEnvironments MediumIDEEnvironment[]
+  githubAccount    GitHubAccount?
+}
+
+model InviteCode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  createdAt DateTime @default(now())
+  active    Boolean  @default(true)
+}
+
+model SqlSchema {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  schemaName String   @unique
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model FileNode {
+  id         String   @id @default(cuid())
+  userId     String
+  path       String
+  kind       String
+  content    String   @db.Text
+  mimeType   String?
+  size       Int      @default(0)
+  updatedAt  DateTime @updatedAt
+  @@unique([userId, path])
+}
+
+model Lesson {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  topic     String
+  summary   String
+  order     Int
+  published Boolean  @default(false)
+  sections  LessonSection[]
+}
+
+model LessonSection {
+  id        String   @id @default(cuid())
+  lessonId  String
+  title     String
+  content   String
+  type      String
+  order     Int
+  lesson    Lesson   @relation(fields: [lessonId], references: [id])
+}
+
+model Progress {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  sectionId String?
+  status    String
+  score     Int?
+  @@unique([userId, lessonId, sectionId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String   @db.Text
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  
+  @@index([senderId, receiverId])
+  @@index([receiverId, senderId])
+}
+
+model Friendship {
+  id         String   @id @default(cuid())
+  userId     String
+  friendId   String
+  status     String   @default("pending") // pending, accepted, blocked
+  createdAt  DateTime @default(now())
+  
+  user       User     @relation("FriendshipInitiator", fields: [userId], references: [id])
+  friend     User     @relation("FriendshipReceiver", fields: [friendId], references: [id])
+  
+  @@unique([userId, friendId])
+}
+
+model GroupChat {
+  id         String   @id @default(cuid())
+  name       String
+  creatorId  String
+  avatarUrl  String?  @db.Text
+  createdAt  DateTime @default(now())
+  
+  members    GroupMember[]
+  messages   GroupMessage[]
+}
+
+model GroupMember {
+  id        String    @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String    @default("member") // admin, member
+  joinedAt  DateTime  @default(now())
+  
+  group     GroupChat @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@unique([groupId, userId])
+}
+
+model GroupMessage {
+  id        String    @id @default(cuid())
+  groupId   String
+  senderId  String
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+  
+  group     GroupChat @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@index([groupId])
+}
+
+model ChallengeProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  challengeId String
+  status      String   @default("completed") // completed
+  xpAwarded   Int      @default(0)
+  completedAt DateTime @default(now())
+  
+  @@unique([userId, challengeId])
+  @@index([userId])
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String   @db.Text
+  icon        String   // Icon name or emoji
+  category    String   // "milestone", "streak", "challenge", "social", "mastery"
+  rarity      String   @default("common") // common, rare, epic, legendary
+  xpReward    Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime    @default(now())
+  notified      Boolean     @default(false)
+  
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([achievementId])
+}
+
+model StudyStreak {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  lastActiveDate  DateTime @default(now())
+  streakFreezeUsed Boolean @default(false)
+  streakFreezeCount Int    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model StudyNote {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  content     String   @db.Text
+  tags        String?  // Comma-separated tags
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([userId, updatedAt])
+}
+
+model StudyChecklist {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  items       String   @db.Text // JSON array of {id, text, checked}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId]) // One checklist per user
+  @@index([userId])
+}
+
+// ============================================
+// CODE PLAYGROUND ENHANCEMENTS
+// ============================================
+
+model CodeSnippet {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?  @db.Text
+  language    String   // "python", "sql", "html", "javascript"
+  code        String   @db.Text
+  tags        String?  // Comma-separated tags
+  isPublic    Boolean  @default(false)
+  shareId     String?  @unique // Unique ID for sharing
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([shareId])
+  @@index([language])
+  @@index([isPublic, createdAt])
+}
+
+model CodeTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  language    String   // "python", "sql", "html", "javascript"
+  code        String   @db.Text
+  category    String   // "starter", "algorithm", "data-structure", "utility"
+  tags        String?  // Comma-separated tags
+  isOfficial  Boolean  @default(false) // Official templates vs user-created
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([language])
+  @@index([category])
+  @@index([isOfficial])
+}
+
+model CodeExecutionHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  language    String   // "python", "sql", "html"
+  code        String   @db.Text
+  output      String?  @db.Text
+  success     Boolean  @default(true)
+  error       String?  @db.Text
+  executionTime Int?   // milliseconds
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([language])
+}
+
+// ============================================
+// GAMIFICATION ENHANCEMENTS
+// ============================================
+
+model DailyQuest {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g., "complete_lesson", "run_code_5x"
+  name        String
+  description String   @db.Text
+  type        String   // "lesson", "challenge", "code", "social", "streak"
+  target      Int      // Target number (e.g., 5 lessons, 3 challenges)
+  xpReward    Int      @default(50)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  progress    DailyQuestProgress[]
+  
+  @@index([isActive])
+}
+
+model DailyQuestProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  questId     String
+  progress    Int      @default(0)
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+  date        DateTime @default(now()) // Track by date
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest       DailyQuest @relation(fields: [questId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, questId, date])
+  @@index([userId, date])
+  @@index([questId])
+}
+
+model UserCustomization {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  theme       String   @default("default") // "default", "dark", "neon", "matrix", etc.
+  accentColor String?  // Custom accent color hex
+  unlockedThemes String @db.Text // JSON array of unlocked theme names
+  unlockedBadges String @db.Text // JSON array of badge codes
+  profileBanner String? @db.Text
+  // MEDIOCRE role customization
+  customBackgroundColor String? // Custom background color hex
+  customGlitchColors   String? @db.Text // JSON array of glitch text colors
+  customCardColor      String? // Custom card background color hex
+  customLayoutColor    String? // Custom layout/accent color hex
+  // Profile card customization
+  profileCardGradient  String? @db.Text // JSON array of gradient colors for animated gradient
+  profileBannerImage    String? @db.Text // Base64 encoded banner image (GIF/PNG)
+  profileBannerType     String? // "gif" or "png"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// ============================================
+// MEDIOCRE IDE MODELS
+// ============================================
+
+model MediumIDEProject {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // GitHub repository fields
+  githubOwner String?
+  githubRepo  String?
+  githubUrl   String?  @db.Text
+  
+  // Project locking
+  isLocked    Boolean  @default(false)
+  
+  // Flask app running
+  flaskPort   Int?     // Port where Flask app is running
+  flaskUrl    String?  @db.Text // URL where Flask app is accessible
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pages       MediumIDEPage[]
+  files       MediumIDEFile[]
+  environment MediumIDEEnvironment?
+  
+  @@index([userId])
+  @@index([userId, createdAt])
+}
+
+model MediumIDEPage {
+  id          String   @id @default(cuid())
+  projectId   String
+  userId      String
+  name        String
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project     MediumIDEProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([userId])
+}
+
+model MediumIDEFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  userId      String
+  path        String   // Full path like "src/main.py" or "config.json"
+  content     String   @db.Text
+  isDirectory Boolean  @default(false)
+  mimeType    String?
+  size        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project     MediumIDEProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, path])
+  @@index([projectId])
+  @@index([userId])
+  @@index([projectId, path])
+}
+
+model MediumIDEEnvironment {
+  id              String   @id @default(cuid())
+  projectId       String   @unique
+  userId          String
+  requirementsTxt String   @db.Text // Contents of requirements.txt
+  installedPackages String @db.Text // JSON array of installed packages
+  lastInstalledAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  project         MediumIDEProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ============================================
+// GITHUB INTEGRATION MODEL
+// ============================================
+
+model GitHubAccount {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  githubUserId    String   @unique // GitHub's numeric user ID
+  githubUsername  String   // GitHub username/login
+  accessToken     String   @db.Text // Encrypted access token
+  refreshToken    String?  @db.Text // Encrypted refresh token (if available)
+  scopes          String   @db.Text // Comma-separated list of granted scopes
+  tokenExpiresAt  DateTime? // When the token expires (if known)
+  avatarUrl       String?  @db.Text
+  email           String?  // GitHub email (if available)
+  connectedAt     DateTime @default(now())
+  lastSyncedAt    DateTime? // Last time we synced data from GitHub
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([githubUserId])
+  @@index([githubUsername])
+}
